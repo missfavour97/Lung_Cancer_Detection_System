@@ -18,7 +18,10 @@ def segment_lung(image):
     thresh = cv2.bitwise_not(thresh)
 
     # Morphological cleaning
-    kernel = np.ones((5, 5), np.uint8)
+    kernel = np.ones((7, 7), np.uint8)
     cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+   
+    # Combine mask with original image
+    masked_image = cv2.bitwise_and(img, img, mask=cleaned)
 
-    return cleaned
+    return masked_image

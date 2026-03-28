@@ -37,6 +37,8 @@ uploaded_file = st.file_uploader("Upload a CT scan image", type=["jpg", "jpeg", 
 if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded CT Scan", use_container_width=True)
+    masked_image = segment_lung(image)
+    st.image(masked_image, caption="Segmented Lung Region", use_container_width=True)
 
     img = transform(image).unsqueeze(0)
 
