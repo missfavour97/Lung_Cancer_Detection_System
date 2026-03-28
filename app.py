@@ -7,6 +7,7 @@ from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 import numpy as np
 import cv2
+from src.segmentation import segment_lung
 
 st.title("Lung Cancer Detection System")
 
