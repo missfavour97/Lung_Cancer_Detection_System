@@ -8,6 +8,9 @@ from pytorch_grad_cam.utils.image import show_cam_on_image
 import numpy as np
 import cv2
 from src.segmentation import segment_lung
+from ultralytics import YOLO
+
+yolo_model = YOLO("yolov8n.pt")
 
 st.title("Lung Cancer Detection System")
 
@@ -37,9 +40,11 @@ uploaded_file = st.file_uploader("Upload a CT scan image", type=["jpg", "jpeg", 
 if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded CT Scan", use_container_width=True)
-    masked_image = segment_lung(image)
-    st.image(masked_image, caption="Segmented Lung Region", use_container_width=True)
+    
+    # Segmentation
+    lung_mask = segment_lung(image)
 
+    # Prepare image for model
     img = transform(image).unsqueeze(0)
 
     # Model prediction
@@ -48,25 +53,51 @@ if uploaded_file is not None:
         probabilities = torch.softmax(outputs, dim=1)
         confidence, predicted = torch.max(probabilities, 1)
 
-    raw_prediction = classes[predicted.item()]
+    prediction = classes[predicted.item()]
     confidence_score = confidence.item() * 100
 
-    if raw_prediction == "no_cancer":
-        prediction = "No Cancer"
-        stage = "No Cancer Detected"
-    else:
-        prediction = "Cancer"
-        stage = "Early Stage"
-
+    # Show prediction
     st.write(f"### Prediction: {prediction}")
     st.write(f"### Confidence Score: {confidence_score:.2f}%")
-    st.write(f"### Estimated Stage Group: {stage}")
-    st.write("Medical Disclaimer: This system is for research purposes only and not for clinical diagnosis.")
+
+    #Stage estimation
+    
+    if prediction == "cancer":
+        if confidence_score > 85:
+          stage = "Early Stage"
+        else:
+            stage = "Advanced Stage"
+
+        st.write(f"### Estimated Stage Group: {stage}")
+    else:
+        st.success("No cancer detected")
+
+    # Medical disclaimer
+    st.info("⚠️ This system is for educational purposes only and should not be used for medical diagnosis.")
+
+    # Show YOLO-style box only if cancer is predicted
+    if prediction == "cancer":
+        img_with_boxes = np.array(image).copy()
+        h, w, _ = img_with_boxes.shape
+
+        # Demo inner box
+        x1 = int(w * 0.30)
+        y1 = int(h * 0.25)
+        x2 = int(w * 0.70)
+        y2 = int(h * 0.65)
+
+        cv2.rectangle(img_with_boxes, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        st.image(img_with_boxes, caption="YOLO-style Detection (Demo)", use_container_width=True)
+    else:
+        st.info("No suspicious region displayed because the scan was predicted as no cancer.")
+
+    # Show segmentation
+    st.image(lung_mask, caption="Segmented Lung Region", use_container_width=True)
 
     # Grad-CAM heatmap
     grayscale_cam = cam(input_tensor=img)[0]
-
-    image_np = cv2.resize(np.array(image), (224, 224)) / 255.0
+    image_np = np.array(image.resize((224, 224))) / 255.0
 
     visualization = show_cam_on_image(
         image_np.astype(np.float32),
