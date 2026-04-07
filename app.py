@@ -107,39 +107,134 @@ if uploaded_file is not None:
 
     st.image(visualization, caption="AI Attention Heatmap", use_container_width=True)
 
-    st.subheader(" Patient Support AI Chatbot")
+    st.subheader("Patient Support AI Chatbot")
 
 user_input = st.text_input("Ask a question about the result:")
 
 if user_input:
     question = user_input.lower().strip()
 
-    if "cancer" in question:
-        response = "Cancer means abnormal cell growth. Please consult a medical professional for proper diagnosis."
+    # Make prediction label safe for chatbot logic
+    current_prediction = prediction if 'prediction' in locals() else "unknown"
+    current_confidence = confidence_score if 'confidence_score' in locals() else 0
+    current_stage = stage if 'stage' in locals() else "Not available"
 
+    response = ""
+
+    # Result meaning
+    if any(word in question for word in ["what does this mean", "what does the result mean", "explain result", "prediction mean"]):
+        if current_prediction == "cancer":
+            response = (
+                f"The system predicts cancer with a confidence score of {current_confidence:.2f}%. "
+                f"The estimated stage is {current_stage}. This is only an AI-based assessment and must be confirmed by a medical professional."
+            )
+        elif current_prediction == "no_cancer":
+            response = (
+                f"The system predicts no cancer with a confidence score of {current_confidence:.2f}%. "
+                "This means the model did not detect patterns associated with cancer in this scan, but a doctor should still confirm the result."
+            )
+        else:
+            response = "The result is not currently available. Please upload a CT scan first."
+
+    # Cancer questions
+    elif "cancer" in question and "no cancer" not in question:
+        response = (
+            "Cancer refers to abnormal cell growth. In this system, a cancer prediction means the model detected image patterns similar to cancer cases in the training data."
+        )
+
+    # Normal / no cancer
     elif "no cancer" in question or "normal" in question:
-        response = "The system predicted no cancer, but you should still consult a doctor for confirmation."
+        if current_prediction == "no_cancer":
+            response = (
+                "The system predicted no cancer for this scan. That means no strong cancer-related pattern was detected by the model."
+            )
+        else:
+            response = (
+                "This scan was not predicted as no cancer. The model detected suspicious patterns, so professional medical review is recommended."
+            )
 
-    elif "accuracy" in question or "reliable" in question:
-        response = "This system is for educational purposes only and should not be used as a final medical diagnosis."
+    # Accuracy / trust
+    elif any(word in question for word in ["accurate", "accuracy", "trust", "reliable", "can i trust this"]):
+        response = (
+            "This system performed well on the test dataset, but it is still an educational AI system and not a replacement for medical diagnosis."
+        )
 
+    # Confidence
+    elif "confidence" in question:
+        response = (
+            f"The confidence score for this result is {current_confidence:.2f}%. "
+            "This shows how strongly the model supports its prediction, but confidence is not the same as a confirmed diagnosis."
+        )
+
+    # Stage
     elif "stage" in question:
-        response = "The estimated stage shown by the system is only an AI-based indication, not a confirmed clinical stage."
+        if current_prediction == "cancer":
+            response = (
+                f"The estimated stage shown by the system is {current_stage}. "
+                "This is only a simple AI-based indication and not a clinically confirmed cancer stage."
+            )
+        else:
+            response = "No stage is shown because the current prediction is no cancer."
 
-    elif "next" in question or "what should i do" in question:
-        response = "The next step is to consult a qualified medical professional and perform further clinical evaluation."
+    # Next step
+    elif any(word in question for word in ["next", "what should i do", "what next", "what do i do now"]):
+        if current_prediction == "cancer":
+            response = (
+                "The next step is to consult a qualified doctor or radiologist for proper medical evaluation and possible follow-up tests."
+            )
+        elif current_prediction == "no_cancer":
+            response = (
+                "Even though the system predicted no cancer, you should still consult a doctor if symptoms persist or if this scan is clinically important."
+            )
+        else:
+            response = "Please upload a CT scan first so the system can generate a result."
 
-    elif "heatmap" in question or "grad-cam" in question:
-        response = "The heatmap shows the region the AI focused on while making its prediction."
+    # Heatmap / Grad-CAM
+    elif "heatmap" in question or "grad-cam" in question or "why did the model focus" in question:
+        response = (
+            "The heatmap shows the region the AI focused on most strongly while making its prediction. It helps explain why the model gave that result."
+        )
 
-    elif "segmentation" in question:
-        response = "Segmentation isolates the lung region so the system can focus on the most relevant part of the CT scan."
+    # Segmentation
+    elif "segmentation" in question or "lung region" in question:
+        response = (
+            "Segmentation isolates the lung region so the system can focus on the most relevant part of the CT scan and reduce background noise."
+        )
 
-    elif "yolo" in question:
-        response = "The YOLO-style detection in this project is a demonstration for localization and not a fully trained medical YOLO model."
+    # YOLO
+    elif "yolo" in question or "bounding box" in question or "box" in question:
+        response = (
+            "The YOLO-style box in this project is a demonstration of localization. It is used to show how suspicious regions could be highlighted in a more advanced system."
+        )
 
+    # Data leakage
+    elif "data leakage" in question or "leakage" in question:
+        response = (
+            "Data leakage happens when similar or duplicate images appear across training and testing sets, causing misleadingly high performance. "
+            "This project fixed that issue before final evaluation."
+        )
+
+    # Metrics
+    elif any(word in question for word in ["f1", "precision", "recall", "confusion matrix", "metrics"]):
+        response = (
+            "The system was evaluated using accuracy, precision, recall, F1-score, and confusion matrix to measure how well it performs on unseen CT scans."
+        )
+
+    # Disclaimer / safety
+    elif any(word in question for word in ["disclaimer", "safe", "medical diagnosis", "doctor"]):
+        response = (
+            "This system is for educational purposes only and should not be used as a final medical diagnosis. A qualified medical professional should always make the final decision."
+        )
+
+    # Greeting
+    elif any(word in question for word in ["hello", "hi", "hey"]):
+        response = "Hello. I can help explain the prediction, confidence score, stage, heatmap, segmentation, YOLO, and next steps."
+
+    # Fallback
     else:
-        response = "I can help explain cancer prediction, stage, heatmap, segmentation, YOLO, accuracy, or next steps."
+        response = (
+            "I can help explain the prediction, confidence score, estimated stage, heatmap, segmentation, YOLO, evaluation metrics, or what to do next."
+        )
 
-    st.write("Chatbot Response:")
+    st.write("### Chatbot Response")
     st.write(response)
