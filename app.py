@@ -106,3 +106,40 @@ if uploaded_file is not None:
     )
 
     st.image(visualization, caption="AI Attention Heatmap", use_container_width=True)
+
+    st.subheader(" Patient Support AI Chatbot")
+
+user_input = st.text_input("Ask a question about the result:")
+
+if user_input:
+    question = user_input.lower().strip()
+
+    if "cancer" in question:
+        response = "Cancer means abnormal cell growth. Please consult a medical professional for proper diagnosis."
+
+    elif "no cancer" in question or "normal" in question:
+        response = "The system predicted no cancer, but you should still consult a doctor for confirmation."
+
+    elif "accuracy" in question or "reliable" in question:
+        response = "This system is for educational purposes only and should not be used as a final medical diagnosis."
+
+    elif "stage" in question:
+        response = "The estimated stage shown by the system is only an AI-based indication, not a confirmed clinical stage."
+
+    elif "next" in question or "what should i do" in question:
+        response = "The next step is to consult a qualified medical professional and perform further clinical evaluation."
+
+    elif "heatmap" in question or "grad-cam" in question:
+        response = "The heatmap shows the region the AI focused on while making its prediction."
+
+    elif "segmentation" in question:
+        response = "Segmentation isolates the lung region so the system can focus on the most relevant part of the CT scan."
+
+    elif "yolo" in question:
+        response = "The YOLO-style detection in this project is a demonstration for localization and not a fully trained medical YOLO model."
+
+    else:
+        response = "I can help explain cancer prediction, stage, heatmap, segmentation, YOLO, accuracy, or next steps."
+
+    st.write("Chatbot Response:")
+    st.write(response)
