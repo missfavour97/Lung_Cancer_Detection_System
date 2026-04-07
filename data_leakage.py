@@ -38,10 +38,10 @@ def find_duplicates(hash_dict_1, hash_dict_2, name1, name2):
     common_hashes = set(reverse_1.keys()) & set(reverse_2.keys())
 
     if not common_hashes:
-        print(f"\n✅ No duplicates between {name1} and {name2}")
+        print(f"\nNo duplicates between {name1} and {name2}")
         return
 
-    print(f"\n⚠️ Duplicates found between {name1} and {name2}:")
+    print(f"\nDuplicates found between {name1} and {name2}:")
     for h in common_hashes:
         for p1 in reverse_1[h]:
             print(f"{name1}: {p1}")
