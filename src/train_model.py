@@ -4,6 +4,7 @@ import torch.optim as optim
 from torchvision import datasets, transforms, models
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import matplotlib.pyplot as plt
 
 device = torch.device("cpu")
 
@@ -29,6 +30,9 @@ optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 best_acc = 0.0
 num_epochs = 100
+
+train_losses = []
+val_accuracies = []
 
 for epoch in range(num_epochs):
     model.train()
@@ -59,6 +63,8 @@ for epoch in range(num_epochs):
             correct += (preds == labels).sum().item()
 
     acc = correct / total
+    train_losses.append(running_loss)
+    val_accuracies.append(acc)
     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {running_loss:.4f}, Val Acc: {acc:.4f}")
 
     if acc > best_acc:
@@ -67,6 +73,17 @@ for epoch in range(num_epochs):
         print("Best model saved!")
 
 print("Training complete")
+plt.figure()
+plt.plot(train_losses)
+plt.title('Training Loss')
+plt.savefig('training_loss.png')
+plt.close()
+
+plt.figure()
+plt.plot(val_accuracies)
+plt.title('Validation Accuracy')
+plt.savefig('validation_accuracy.png')
+plt.close()
 print(f"Best Validation Accuracy: {best_acc:.4f}")
 
 # Load best model for final testing

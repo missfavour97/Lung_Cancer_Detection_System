@@ -55,6 +55,7 @@ if uploaded_file is not None:
 
     prediction = classes[predicted.item()]
     confidence_score = confidence.item() * 100
+    confidence_score = min(confidence_score, 99.5)
 
     # Show prediction
     st.write(f"### Prediction: {prediction}")
