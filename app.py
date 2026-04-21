@@ -9,10 +9,81 @@ import numpy as np
 import cv2
 from src.segmentation import segment_lung
 from ultralytics import YOLO
+import base64
+import streamlit.components.v1 as components
+
+def get_base64_image(image_path):
+    with open(image_path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
 
 yolo_model = YOLO("yolov8n.pt")
 
+st.set_page_config(layout="wide")
+
 st.title("Lung Cancer Detection System")
+
+hero_images = [
+    "images/hero1.jpg",
+    "images/hero2.jpg",
+    "images/hero3.jpg",
+    "images/hero4.jpg",
+    "images/hero5.jpg",
+    "images/hero6.jpg",
+]
+
+encoded_images = [get_base64_image(img) for img in hero_images]
+
+slider_html = f"""
+<div style="width:100%; max-width:2000px; margin:auto; overflow:hidden; border-radius:18px; box-shadow:0 6px 18px rgba(0,0,0,0.2);">
+  <div class="slider">
+    {''.join([f'<img src="data:image/jpg;base64,{img}" class="slide">' for img in encoded_images])}
+  </div>
+</div>
+
+<style>
+.slider {{
+  display: flex;
+  width: 500%;
+  height: 360%;
+  animation: slideAnimation {len(encoded_images) * 4}s infinite;
+}}
+
+.slide {{
+  width: 20%;
+  height: 360px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border-radius: 18px;
+}}
+
+@keyframes slideAnimation {{
+  0% {{ transform: translateX(0%); }}
+  16% {{ transform: translateX(0%); }}
+
+  20% {{ transform: translateX(-20%); }}
+  36% {{ transform: translateX(-20%); }}
+
+  40% {{ transform: translateX(-40%); }}
+  56% {{ transform: translateX(-40%); }}
+
+  60% {{ transform: translateX(-60%); }}
+  76% {{ transform: translateX(-60%); }}
+
+  80% {{ transform: translateX(-80%); }}
+  96% {{ transform: translateX(-80%); }}
+
+  100% {{ transform: translateX(0%); }}
+}}
+</style>
+"""
+
+components.html(slider_html, height=360)
+
+st.markdown("<div style='margin-top:-18px; '></div>", unsafe_allow_html=True)
+st.markdown("### AI-Based Analysis of Lung CT Scans")
+st.write("Upload a CT scan image to receive prediction, visualization, and patient support guidance.")
+
 
 # Image preprocessing
 transform = transforms.Compose([
