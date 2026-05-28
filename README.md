@@ -1,21 +1,58 @@
 # Lung Cancer Detection System
 
-##  Overview
-This project presents a Lung Cancer Detection System that uses deep learning to analyze CT scan images and predict whether cancer is present. The system integrates classification, segmentation, explainability, and a simple chatbot to support user interaction.
+## Overview
 
-##  Features
-- Lung cancer classification using ResNet-18  
-- Lung segmentation using OpenCV  
-- Model explainability using Grad-CAM  
-- Performance evaluation with accuracy, precision, recall, F1-score, and confusion matrix  
-- Training visualization with loss and accuracy graphs  
-- Patient Support AI chatbot for guidance and explanation  
+This is a school project that demonstrates how deep learning can be used to classify lung CT scan images as `cancer` or `no_cancer`. The project combines image classification, simple lung segmentation, Grad-CAM explainability, PDF report generation, and a small rule-based chatbot inside a Streamlit web app.
 
-##  Technologies Used
-Python, PyTorch, Torchvision, OpenCV, NumPy, Streamlit, Matplotlib, scikit-learn, pytorch-grad-cam  
+The system is built for educational demonstration only. It is not a real medical diagnosis tool.
 
-##  Project Structure
+## Project Aim
+
+The aim of this project is to show an end-to-end AI workflow for medical image analysis:
+
+- Prepare a CT image dataset for training, validation, and testing
+- Train a ResNet-18 image classification model
+- Display the prediction and confidence score in a web interface
+- Use Grad-CAM to show which image regions influenced the model
+- Segment the lung area using OpenCV
+- Generate a downloadable PDF summary report
+- Provide basic patient-support explanations through a chatbot
+
+## Features
+
+- Lung CT image classification using ResNet-18
+- OpenCV-based lung region segmentation
+- Grad-CAM attention heatmap for model explainability
+- Illustrative suspicious-region overlay for presentation purposes
+- PDF report generation using ReportLab
+- Rule-based patient support chatbot
+- Training loss and validation accuracy graphs
+- Data leakage checking scripts for duplicate images
+
+## Technologies Used
+
+- Python
+- Streamlit
+- PyTorch and Torchvision
+- OpenCV
+- NumPy
+- Pillow
+- Matplotlib
+- scikit-learn
+- Grad-CAM
+- ReportLab
+
+## Project Structure
+
+```text
 Lung_Cancer_Detection_System/
+├── app.py
+├── README.md
+├── requirements.txt
+├── data_leakage.py
+├── fix_leakage.py
+├── training_loss.png
+├── validation_accuracy.png
 ├── dataset/
 │   ├── train/
 │   ├── val/
@@ -23,45 +60,133 @@ Lung_Cancer_Detection_System/
 ├── models/
 │   └── best_lung_cancer_model.pth
 ├── src/
+│   ├── segmentation.py
+│   ├── split_dataset.py
 │   └── train_model.py
-├── app.py
-├── requirements.txt
-├── training_loss.png
-├── validation_accuracy.png
-└── README.md
+└── images/
+    └── hero images used by the Streamlit app
+```
 
-##  Installation
-git clone <https://github.com/missfavour97/Lung_Cancer_Detection_System>  
-cd Lung_Cancer_Detection_System  
-pip install -r requirements.txt  
+## Installation
 
-##  Run the Application
-python3 -m streamlit run app.py  
+```bash
+git clone https://github.com/missfavour97/Lung_Cancer_Detection_System
+cd Lung_Cancer_Detection_System
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-Open in browser: http://localhost:8501  
+## Run the Application
 
-##  Train the Model
-python3 src/train_model.py  
+```bash
+python3 -m streamlit run app.py
+```
 
-##  Model Performance
-Test Accuracy: 97.01%  
-F1-score: 0.97  
-Cancer Recall: 1.00  
+Then open:
+
+```text
+http://localhost:8501
+```
+
+## Train the Model
+
+```bash
+python3 src/train_model.py
+```
+
+The training script uses:
+
+- `dataset/train` for training
+- `dataset/val` for validation
+- `dataset/test` for final testing
+
+The best model is saved as:
+
+```text
+models/best_lung_cancer_model.pth
+```
+
+## Model Performance
+
+Reported test performance from the current project run:
+
+```text
+Test Accuracy: 97.01%
+F1-score: 0.97
+Cancer Recall: 1.00
 
 Confusion Matrix:
 [[31  0]
  [ 2 34]]
+```
 
-##  Chatbot Functionality
-The chatbot explains predictions, provides guidance, and answers questions about results, accuracy, segmentation, heatmap, and next steps.
+These results are for the school project dataset and should not be interpreted as clinical performance.
 
-##  Disclaimer
-This system is for educational purposes only and should not be used for medical diagnosis. Always consult a qualified healthcare professional.
+## App Outputs
 
-##  Future Improvements
-- Use larger and more diverse datasets  
-- Improve segmentation with deep learning methods  
-- Enhance chatbot with advanced AI models  
+After an image is uploaded, the app can show:
 
-##  Author
-Favour Okwudili Computer engineering
+- Uploaded CT scan
+- Prediction result
+- Confidence score
+- Confidence category
+- Illustrative suspicious-region overlay
+- Segmented lung region
+- Grad-CAM heatmap
+- Downloadable PDF report
+- Chatbot explanation
+
+## Hero Slide Images
+
+The files in the `images/` folder are used only for the homepage image slider in the Streamlit app. They make the school project presentation look more complete, but they are not used for training, validation, testing, or prediction.
+
+The app expects images named:
+
+```text
+images/hero1.jpg
+images/hero2.jpg
+images/hero3.jpg
+images/hero4.jpg
+images/hero5.jpg
+images/hero6.jpg
+```
+
+For a faster app, these images can be resized or compressed before deployment. If external images are used, their sources should be credited in the project report or presentation.
+
+## Important Note About The Suspicious-Region Overlay
+
+The green box shown in the app is an illustrative suspicious region for presentation purposes. It is not produced by a trained YOLO detector. The Grad-CAM heatmap is the main visual explanation of the classifier's attention.
+
+## Dataset Notes
+
+The dataset is arranged into `cancer` and `no_cancer` folders under train, validation, and test splits. The project also includes scripts to check and remove exact duplicate files between dataset splits:
+
+```bash
+python3 data_leakage.py
+python3 fix_leakage.py
+```
+
+## Limitations
+
+- This is a school project and not a certified medical system.
+- The dataset is limited and may not represent real-world clinical variation.
+- The app accepts image files such as JPG and PNG, not full clinical DICOM studies.
+- The confidence category is based only on model confidence, not clinical cancer staging.
+- The suspicious-region box is illustrative, not a real object-detection output.
+- A doctor or radiologist must always make real medical decisions.
+
+## Future Improvements
+
+- Use a larger and more diverse dataset
+- Add stronger image preprocessing and normalization
+- Add data augmentation during training
+- Store model class labels separately from the dataset folder
+- Add automated tests for model loading, segmentation, and PDF generation
+- Improve the chatbot with more structured educational answers
+- Add screenshots of the Streamlit app to the README
+
+## Author
+
+Favour Okwudili  
+Computer Engineering

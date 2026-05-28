@@ -8,7 +8,6 @@ from pytorch_grad_cam.utils.image import show_cam_on_image
 import numpy as np
 import cv2
 from src.segmentation import segment_lung
-from ultralytics import YOLO
 import base64
 import streamlit.components.v1 as components
 from reportlab.lib.pagesizes import A4
@@ -17,15 +16,38 @@ from reportlab.lib.utils import ImageReader
 from datetime import datetime
 import tempfile
 import io
+from pathlib import Path
 
 
 st.set_page_config(layout="wide")
 
 
+@st.cache_data(show_spinner=False)
 def get_base64_image(image_path):
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
-    
+
+
+def build_slider_keyframes(image_count):
+    if image_count <= 1:
+        return "0% { transform: translateX(0%); } 100% { transform: translateX(0%); }"
+
+    keyframes = []
+    step = 100 / image_count
+    hold = step * 0.82
+
+    for index in range(image_count):
+        position = -(index * step)
+        start = index * step
+        end = min(start + hold, 100)
+
+        keyframes.append(f"{start:.2f}% {{ transform: translateX({position:.2f}%); }}")
+        keyframes.append(f"{end:.2f}% {{ transform: translateX({position:.2f}%); }}")
+
+    keyframes.append("100% { transform: translateX(0%); }")
+    return "\n".join(keyframes)
+
+
 def is_likely_ct_scan(image):
     img_np = np.array(image)
 
@@ -50,7 +72,7 @@ def is_likely_ct_scan(image):
     return True
 
 
-def create_pdf_report(prediction, confidence_score, stage, segmentation_img, heatmap_img):
+def create_pdf_report(prediction, confidence_score, confidence_category, segmentation_img, heatmap_img):
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf_path = temp_file.name
 
@@ -68,7 +90,7 @@ def create_pdf_report(prediction, confidence_score, stage, segmentation_img, hea
     c.drawString(40, height - 42, "AI Diagnostic Center")
 
     c.setFont("Helvetica", 12)
-    c.drawString(42, height - 68, "Advanced Lung Cancer Screening Report")
+    c.drawString(42, height - 68, "Educational Lung Cancer Screening Report")
 
     # Reset text color
     c.setFillColorRGB(0, 0, 0)
@@ -81,7 +103,7 @@ def create_pdf_report(prediction, confidence_score, stage, segmentation_img, hea
     c.setFont("Helvetica", 12)
     c.drawString(60, height - 145, f"Prediction: {prediction}")
     c.drawString(60, height - 165, f"Confidence Score: {confidence_score:.2f}%")
-    c.drawString(60, height - 185, f"Estimated Stage: {stage}")
+    c.drawString(60, height - 185, f"Confidence Category: {confidence_category}")
 
     # Images
     c.setFont("Helvetica-Bold", 14)
@@ -129,10 +151,6 @@ def create_pdf_report(prediction, confidence_score, stage, segmentation_img, hea
     return pdf_path
 
 
-# YOLO demo model
-yolo_model = YOLO("yolov8n.pt")
-
-
 st.title("Lung Cancer Detection System")
 
 hero_images = [
@@ -144,9 +162,13 @@ hero_images = [
     "images/hero6.jpg",
 ]
 
-encoded_images = [get_base64_image(img) for img in hero_images]
+hero_images = [img for img in hero_images if Path(img).exists()]
 
-slider_html = f"""
+if hero_images:
+    encoded_images = [get_base64_image(img) for img in hero_images]
+    slider_keyframes = build_slider_keyframes(len(encoded_images))
+
+    slider_html = f"""
 <div style="width:100%; max-width:2000px; margin:auto; overflow:hidden; border-radius:18px; box-shadow:0 6px 18px rgba(0,0,0,0.2);">
   <div class="slider">
     {''.join([f'<img src="data:image/jpg;base64,{img}" class="slide">' for img in encoded_images])}
@@ -172,33 +194,17 @@ slider_html = f"""
 }}
 
 @keyframes slideAnimation {{
-  0% {{ transform: translateX(0%); }}
-  14% {{ transform: translateX(0%); }}
-
-  17% {{ transform: translateX(-16.66%); }}
-  31% {{ transform: translateX(-16.66%); }}
-
-  34% {{ transform: translateX(-33.33%); }}
-  48% {{ transform: translateX(-33.33%); }}
-
-  51% {{ transform: translateX(-50%); }}
-  65% {{ transform: translateX(-50%); }}
-
-  68% {{ transform: translateX(-66.66%); }}
-  82% {{ transform: translateX(-66.66%); }}
-
-  85% {{ transform: translateX(-83.33%); }}
-  96% {{ transform: translateX(-83.33%); }}
-
-  100% {{ transform: translateX(0%); }}
+  {slider_keyframes}
 }}
 </style>
 """
 
-components.html(slider_html, height=365)
+    components.html(slider_html, height=365)
+else:
+    st.info("Hero slide images are missing. Add images named hero1.jpg to hero6.jpg inside the images folder.")
 
 st.markdown("### AI-Based Analysis of Lung CT Scans")
-st.write("Upload a CT scan image to receive prediction, visualization, and patient support guidance.")
+st.write("Upload a CT scan image to receive a class prediction, visual explanations, and patient support guidance.")
 
 
 # Image preprocessing
@@ -253,22 +259,23 @@ if uploaded_file is not None:
     st.write(f"### Prediction: {prediction}")
     st.write(f"### Confidence Score: {confidence_score:.2f}%")
 
-    # Stage estimation
+    # Confidence category for the school-project report
     if prediction == "cancer":
         if confidence_score > 85:
-            stage = "Early Stage"
+            confidence_category = "High model confidence"
         else:
-            stage = "Advanced Stage"
+            confidence_category = "Moderate model confidence"
 
-        st.write(f"### Estimated Stage Group: {stage}")
+        st.write(f"### Confidence Category: {confidence_category}")
     else:
-        stage = "Not Applicable"
+        confidence_category = "Not applicable"
         st.success("No cancer detected")
 
     # Medical disclaimer
     st.info("⚠️ This system is for educational purposes only and should not be used for medical diagnosis.")
 
-    # Show YOLO-style box only if cancer is predicted
+    # Show an illustrative suspicious region only if cancer is predicted.
+    # This is a demo overlay, not a separate object-detection model.
     if prediction == "cancer":
         img_with_boxes = np.array(image).copy()
         h, w, _ = img_with_boxes.shape
@@ -280,9 +287,10 @@ if uploaded_file is not None:
 
         cv2.rectangle(img_with_boxes, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-        st.image(img_with_boxes, caption="YOLO-style Detection (Demo)", use_container_width=True)
+        st.image(img_with_boxes, caption="Illustrative Suspicious Region (Demo)", use_container_width=True)
+        st.caption("The green box is an illustrative region for presentation purposes. The Grad-CAM heatmap shows the model attention.")
     else:
-        st.info("No suspicious region displayed because the scan was predicted as no cancer.")
+        st.info("No illustrative suspicious region displayed because the scan was predicted as no cancer.")
 
     # Show segmentation
     st.image(lung_mask, caption="Segmented Lung Region", use_container_width=True)
@@ -303,7 +311,7 @@ if uploaded_file is not None:
     pdf_path = create_pdf_report(
         prediction,
         confidence_score,
-        stage,
+        confidence_category,
         lung_mask,
         visualization
     )
@@ -320,7 +328,7 @@ if uploaded_file is not None:
 st.subheader("Patient Support AI Chatbot")
 
 user_input = st.text_input(
-    "Ask about the prediction, confidence score, estimated stage, heatmap, segmentation, symptoms, risk factors, or next steps:"
+    "Ask about the prediction, confidence score, confidence category, heatmap, segmentation, symptoms, risk factors, or next steps:"
 )
 
 if user_input:
@@ -328,14 +336,14 @@ if user_input:
 
     current_prediction = prediction if "prediction" in locals() else "unknown"
     current_confidence = confidence_score if "confidence_score" in locals() else 0
-    current_stage = stage if "stage" in locals() else "Not available"
+    current_confidence_category = confidence_category if "confidence_category" in locals() else "Not available"
 
     response = ""
 
     # Greeting
     if question in ["hi", "hello", "hey"]:
         response = (
-            "Hello. I can help explain the result, confidence score, estimated stage, symptoms, risk factors, "
+            "Hello. I can help explain the result, confidence score, confidence category, symptoms, risk factors, "
             "treatment basics, and what to do next."
         )
 
@@ -344,7 +352,7 @@ if user_input:
         if current_prediction == "cancer":
             response = (
                 f"The system predicts cancer with a confidence score of {current_confidence:.2f}%. "
-                f"The estimated stage is {current_stage}. This means the model detected patterns similar to cancer cases, "
+                f"The confidence category is {current_confidence_category}. This means the model detected patterns similar to cancer cases, "
                 "but this is not a final diagnosis and must be confirmed by a doctor."
             )
         elif current_prediction == "no_cancer":
@@ -385,14 +393,15 @@ if user_input:
             "This shows how strongly the model supports its prediction, but it is not the same as a confirmed diagnosis."
         )
 
-    # Stage
-    elif "stage" in question:
+    # Confidence category / stage wording
+    elif "confidence category" in question or "category" in question or "stage" in question:
         if current_prediction == "cancer":
             response = (
-                f"The estimated stage is {current_stage}. This is only an AI-based indication and not a clinically confirmed stage."
+                f"The confidence category is {current_confidence_category}. This is based on the model score only, "
+                "not on clinical cancer staging."
             )
         else:
-            response = "No stage is shown because the current prediction is no cancer."
+            response = "No confidence category is shown because the current prediction is no cancer."
 
     # Symptoms
     elif "symptom" in question or "sign" in question:
@@ -438,8 +447,8 @@ if user_input:
     # Treatment
     elif "treatment" in question or "treat" in question or "therapy" in question:
         response = (
-            "Treatment may include surgery, chemotherapy, radiation therapy, targeted therapy, or immunotherapy depending on the stage "
-            "and medical evaluation. A doctor must decide the appropriate treatment plan."
+            "Treatment may include surgery, chemotherapy, radiation therapy, targeted therapy, or immunotherapy depending on medical "
+            "evaluation. A doctor must decide the appropriate treatment plan."
         )
 
     # Biopsy
@@ -514,7 +523,7 @@ if user_input:
     # Fallback
     else:
         response = (
-            "I can help explain the result, confidence score, estimated stage, symptoms, risk factors, prevention, treatment basics, "
+            "I can help explain the result, confidence score, confidence category, symptoms, risk factors, prevention, treatment basics, "
             "CT scan meaning, and what to do next."
         )
 
