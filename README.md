@@ -224,4 +224,4 @@ python3 fix_leakage.py
 ## Author
 
 Favour Okwudili  
-Computer Engineering
+Computer Engineering Student
