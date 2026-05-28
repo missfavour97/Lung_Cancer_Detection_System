@@ -169,11 +169,29 @@ def draw_image_panel(c, title, image_reader, x, y, width, height):
     )
 
 
-def create_pdf_report(prediction, confidence_score, confidence_category, original_img, segmentation_img, heatmap_img):
+def clean_report_field(value, fallback="Not provided"):
+    value = str(value).strip()
+    return value if value else fallback
+
+
+def create_pdf_report(
+    prediction,
+    confidence_score,
+    confidence_category,
+    original_img,
+    segmentation_img,
+    heatmap_img,
+    report_details=None,
+):
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf_path = temp_file.name
     generated_at = datetime.now()
     report_id = generated_at.strftime("ADC-%Y%m%d-%H%M%S")
+    report_details = report_details or {}
+    patient_name = clean_report_field(report_details.get("patient_name"))
+    patient_age = clean_report_field(report_details.get("patient_age"))
+    scan_date = clean_report_field(report_details.get("scan_date"))
+    supervisor_name = clean_report_field(report_details.get("supervisor_name"))
 
     c = canvas.Canvas(pdf_path, pagesize=A4)
     width, height = A4
@@ -217,10 +235,10 @@ def create_pdf_report(prediction, confidence_score, confidence_category, origina
     c.setStrokeColorRGB(0.82, 0.88, 0.91)
     c.roundRect(margin, height - 218, content_width, 64, 8, fill=1, stroke=1)
 
-    draw_info_field(c, "Patient", "Demo / Not provided", margin + 18, height - 176)
-    draw_info_field(c, "Study Type", "Uploaded CT image", margin + 155, height - 176)
-    draw_info_field(c, "Model", "ResNet-18 classifier", margin + 300, height - 176)
-    draw_info_field(c, "Classes", "cancer / no_cancer", margin + 430, height - 176)
+    draw_info_field(c, "Patient Name / ID", patient_name, margin + 18, height - 176)
+    draw_info_field(c, "Age", patient_age, margin + 170, height - 176)
+    draw_info_field(c, "Scan Date", scan_date, margin + 245, height - 176)
+    draw_info_field(c, "Doctor / Supervisor", supervisor_name, margin + 365, height - 176)
 
     # Prediction summary
     draw_section_title(c, "Prediction Summary", margin, height - 246)
@@ -240,7 +258,8 @@ def create_pdf_report(prediction, confidence_score, confidence_category, origina
 
     c.setFillColorRGB(0.30, 0.35, 0.38)
     summary_note = (
-        "This result is produced by the project classifier and should be used only for educational demonstration."
+        "This result is produced by a ResNet-18 classifier for cancer / no_cancer image classification and should "
+        "be used only for educational demonstration."
     )
     draw_wrapped_text(c, summary_note, margin + 18, height - 330, content_width - 36)
 
@@ -796,6 +815,25 @@ if uploaded_file is not None:
 
     st.image(visualization, caption="AI Attention Heatmap", width="stretch")
 
+    # Optional report details for the downloadable PDF
+    st.markdown("### Report Details")
+    st.caption("Optional fields for the educational PDF report.")
+
+    report_col_1, report_col_2 = st.columns(2)
+    patient_name = report_col_1.text_input("Patient name or ID", placeholder="Demo Patient / ID")
+    patient_age = report_col_2.text_input("Age", placeholder="Not provided")
+
+    report_col_3, report_col_4 = st.columns(2)
+    scan_date = report_col_3.date_input("Scan date", value=datetime.now().date())
+    supervisor_name = report_col_4.text_input("Doctor / class supervisor name", placeholder="Not provided")
+
+    report_details = {
+        "patient_name": patient_name,
+        "patient_age": patient_age,
+        "scan_date": scan_date.strftime("%Y-%m-%d"),
+        "supervisor_name": supervisor_name,
+    }
+
     # Create PDF Report
     pdf_path = create_pdf_report(
         prediction,
@@ -803,7 +841,8 @@ if uploaded_file is not None:
         confidence_category,
         image,
         lung_mask,
-        visualization
+        visualization,
+        report_details,
     )
 
     with open(pdf_path, "rb") as pdf_file:

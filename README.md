@@ -143,6 +143,10 @@ The app generates a polished educational PDF report with a hospital-style layout
 
 - Original AI Diagnostic Center logo drawn inside the PDF
 - Report ID and generation date
+- Optional patient name or ID
+- Optional age
+- Scan date
+- Optional doctor or class supervisor name
 - Study information section
 - Prediction summary
 - Confidence score and confidence category
