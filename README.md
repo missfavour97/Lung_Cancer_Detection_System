@@ -24,7 +24,7 @@ The aim of this project is to show an end-to-end AI workflow for medical image a
 - OpenCV-based lung region segmentation
 - Grad-CAM attention heatmap for model explainability
 - Illustrative suspicious-region overlay for presentation purposes
-- PDF report generation using ReportLab
+- Hospital-style educational PDF report generation using ReportLab
 - System-focused chatbot with similarity-based question matching
 - Training loss and validation accuracy graphs
 - Data leakage checking scripts for duplicate images
@@ -136,6 +136,23 @@ After an image is uploaded, the app can show:
 - Grad-CAM heatmap
 - Downloadable PDF report
 - System-focused chatbot explanation
+
+## PDF Report
+
+The app generates a polished educational PDF report with a hospital-style layout. The report includes:
+
+- Original AI Diagnostic Center logo drawn inside the PDF
+- Report ID and generation date
+- Study information section
+- Prediction summary
+- Confidence score and confidence category
+- Original uploaded image
+- Segmented lung image
+- Grad-CAM heatmap
+- Recommendation section
+- Educational disclaimer
+
+The logo is custom for this school project and does not represent a real hospital or medical institution.
 
 ## System-Focused Chatbot
 

@@ -73,80 +73,230 @@ def is_likely_ct_scan(image):
     return True
 
 
-def create_pdf_report(prediction, confidence_score, confidence_category, segmentation_img, heatmap_img):
+def image_to_pdf_reader(image):
+    if isinstance(image, Image.Image):
+        pil_image = image
+    else:
+        pil_image = Image.fromarray(np.asarray(image))
+
+    if pil_image.mode not in ("RGB", "RGBA"):
+        pil_image = pil_image.convert("RGB")
+
+    buffer = io.BytesIO()
+    pil_image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return ImageReader(buffer)
+
+
+def draw_report_logo(c, x, y, size=54):
+    center_x = x + size / 2
+    center_y = y + size / 2
+
+    c.setFillColorRGB(1, 1, 1)
+    c.circle(center_x, center_y, size / 2, fill=1, stroke=0)
+
+    c.setStrokeColorRGB(0.0, 0.38, 0.62)
+    c.setLineWidth(2)
+    c.line(center_x, center_y + 14, center_x, center_y + 2)
+    c.line(center_x, center_y + 2, center_x - 7, center_y - 6)
+    c.line(center_x, center_y + 2, center_x + 7, center_y - 6)
+
+    c.setFillColorRGB(0.82, 0.95, 0.98)
+    c.setStrokeColorRGB(0.0, 0.38, 0.62)
+    c.ellipse(center_x - 18, center_y - 16, center_x - 2, center_y + 9, fill=1, stroke=1)
+    c.ellipse(center_x + 2, center_y - 16, center_x + 18, center_y + 9, fill=1, stroke=1)
+
+    c.setFillColorRGB(0.0, 0.55, 0.68)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString(center_x, y + 6, "AI")
+
+
+def draw_section_title(c, title, x, y):
+    c.setFillColorRGB(0.0, 0.22, 0.36)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x, y, title)
+    c.setStrokeColorRGB(0.78, 0.86, 0.90)
+    c.setLineWidth(0.8)
+    c.line(x, y - 6, x + 515, y - 6)
+
+
+def draw_info_field(c, label, value, x, y):
+    c.setFillColorRGB(0.42, 0.48, 0.52)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(x, y, label.upper())
+    c.setFillColorRGB(0.08, 0.12, 0.16)
+    c.setFont("Helvetica", 10)
+    c.drawString(x, y - 15, value)
+
+
+def draw_wrapped_text(c, text, x, y, max_width, line_height=12, font_name="Helvetica", font_size=9):
+    c.setFont(font_name, font_size)
+    words = text.split()
+    line = ""
+
+    for word in words:
+        test_line = f"{line} {word}".strip()
+        if c.stringWidth(test_line, font_name, font_size) <= max_width:
+            line = test_line
+        else:
+            c.drawString(x, y, line)
+            y -= line_height
+            line = word
+
+    if line:
+        c.drawString(x, y, line)
+
+    return y - line_height
+
+
+def draw_image_panel(c, title, image_reader, x, y, width, height):
+    c.setFillColorRGB(0.97, 0.99, 1.0)
+    c.setStrokeColorRGB(0.80, 0.88, 0.92)
+    c.roundRect(x, y, width, height, 8, fill=1, stroke=1)
+
+    c.setFillColorRGB(0.0, 0.22, 0.36)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(x + 10, y + height - 20, title)
+
+    c.drawImage(
+        image_reader,
+        x + 10,
+        y + 12,
+        width=width - 20,
+        height=height - 42,
+        preserveAspectRatio=True,
+        anchor="c",
+    )
+
+
+def create_pdf_report(prediction, confidence_score, confidence_category, original_img, segmentation_img, heatmap_img):
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf_path = temp_file.name
+    generated_at = datetime.now()
+    report_id = generated_at.strftime("ADC-%Y%m%d-%H%M%S")
 
     c = canvas.Canvas(pdf_path, pagesize=A4)
     width, height = A4
+    margin = 40
+    content_width = width - (margin * 2)
 
-    # Header
-    
-    c.setFillColorRGB(0.0, 0.35, 0.65)
-    c.rect(0, height - 95, width, 95, fill=1)
+    original_reader = image_to_pdf_reader(original_img)
+    seg_reader = image_to_pdf_reader(segmentation_img)
+    heat_reader = image_to_pdf_reader(heatmap_img)
 
-    # Header Text
+    # Hospital-style header
+    c.setFillColorRGB(0.0, 0.22, 0.36)
+    c.rect(0, height - 105, width, 105, fill=1, stroke=0)
+    c.setFillColorRGB(0.0, 0.58, 0.70)
+    c.rect(0, height - 109, width, 4, fill=1, stroke=0)
+
+    draw_report_logo(c, margin, height - 86)
+
     c.setFillColorRGB(1, 1, 1)
     c.setFont("Helvetica-Bold", 24)
-    c.drawString(40, height - 42, "AI Diagnostic Center")
+    c.drawString(110, height - 43, "AI Diagnostic Center")
 
     c.setFont("Helvetica", 12)
-    c.drawString(42, height - 68, "Educational Lung Cancer Screening Report")
+    c.drawString(112, height - 64, "Educational Lung CT Screening Report")
 
-    # Reset text color
-    c.setFillColorRGB(0, 0, 0)
-    c.drawString(40, height - 85, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    c.setFont("Helvetica-Bold", 9)
+    c.drawRightString(width - margin, height - 42, "REPORT ID")
+    c.setFont("Helvetica", 9)
+    c.drawRightString(width - margin, height - 56, report_id)
+    c.drawRightString(width - margin, height - 72, generated_at.strftime("%Y-%m-%d %H:%M:%S"))
 
-    # Main Results
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(40, height - 120, "Prediction Result")
+    c.setFillColorRGB(0.88, 0.97, 1.0)
+    c.roundRect(width - margin - 120, height - 96, 120, 18, 8, fill=1, stroke=0)
+    c.setFillColorRGB(0.0, 0.30, 0.46)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString(width - margin - 60, height - 91, "EDUCATIONAL PROTOTYPE")
 
-    c.setFont("Helvetica", 12)
-    c.drawString(60, height - 145, f"Prediction: {prediction}")
-    c.drawString(60, height - 165, f"Confidence Score: {confidence_score:.2f}%")
-    c.drawString(60, height - 185, f"Confidence Category: {confidence_category}")
+    # Study information
+    draw_section_title(c, "Study Information", margin, height - 132)
+    c.setFillColorRGB(1, 1, 1)
+    c.setStrokeColorRGB(0.82, 0.88, 0.91)
+    c.roundRect(margin, height - 218, content_width, 64, 8, fill=1, stroke=1)
 
-    # Images
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(40, height - 225, "AI Findings")
+    draw_info_field(c, "Patient", "Demo / Not provided", margin + 18, height - 176)
+    draw_info_field(c, "Study Type", "Uploaded CT image", margin + 155, height - 176)
+    draw_info_field(c, "Model", "ResNet-18 classifier", margin + 300, height - 176)
+    draw_info_field(c, "Classes", "cancer / no_cancer", margin + 430, height - 176)
 
-    seg_pil = Image.fromarray(segmentation_img)
-    heat_pil = Image.fromarray(heatmap_img)
+    # Prediction summary
+    draw_section_title(c, "Prediction Summary", margin, height - 246)
+    c.setFillColorRGB(0.97, 0.99, 1.0)
+    c.setStrokeColorRGB(0.82, 0.88, 0.91)
+    c.roundRect(margin, height - 342, content_width, 76, 8, fill=1, stroke=1)
 
-    seg_buffer = io.BytesIO()
-    heat_buffer = io.BytesIO()
+    result_color = (0.72, 0.12, 0.12) if prediction == "cancer" else (0.08, 0.48, 0.22)
+    c.setFillColorRGB(*result_color)
+    c.roundRect(margin + 18, height - 315, 130, 28, 12, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 13)
+    c.drawCentredString(margin + 83, height - 306, prediction.upper())
 
-    seg_pil.save(seg_buffer, format="PNG")
-    heat_pil.save(heat_buffer, format="PNG")
+    draw_info_field(c, "Confidence Score", f"{confidence_score:.2f}%", margin + 180, height - 293)
+    draw_info_field(c, "Confidence Category", confidence_category, margin + 315, height - 293)
 
-    seg_buffer.seek(0)
-    heat_buffer.seek(0)
+    c.setFillColorRGB(0.30, 0.35, 0.38)
+    summary_note = (
+        "This result is produced by the project classifier and should be used only for educational demonstration."
+    )
+    draw_wrapped_text(c, summary_note, margin + 18, height - 330, content_width - 36)
 
-    c.drawImage(ImageReader(seg_buffer), 40, height - 430, width=240, height=160)
-    c.drawImage(ImageReader(heat_buffer), 310, height - 430, width=240, height=160)
+    # Visual findings
+    draw_section_title(c, "Visual Findings", margin, height - 372)
+    panel_width = 160
+    panel_height = 148
+    panel_y = height - 544
+    draw_image_panel(c, "Original Upload", original_reader, margin, panel_y, panel_width, panel_height)
+    draw_image_panel(c, "Segmented Lung Region", seg_reader, margin + 178, panel_y, panel_width, panel_height)
+    draw_image_panel(c, "Grad-CAM Heatmap", heat_reader, margin + 356, panel_y, panel_width, panel_height)
 
-    
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(40, height - 470, "Recommendation")
-
-    c.setFont("Helvetica", 11)
+    # Recommendation
+    draw_section_title(c, "Recommendation", margin, height - 575)
+    c.setFillColorRGB(1, 1, 1)
+    c.setStrokeColorRGB(0.82, 0.88, 0.91)
+    c.roundRect(margin, height - 648, content_width, 50, 8, fill=1, stroke=1)
 
     if prediction == "cancer":
-        c.drawString(60, height - 495, "Please consult a qualified doctor for further clinical evaluation.")
+        recommendation = (
+            "The model detected cancer-like patterns. For a real case, the scan would need review by a qualified "
+            "doctor or radiologist. For this project, review the heatmap, segmentation, and confidence score."
+        )
     else:
-        c.drawString(60, height - 495, "No strong cancer pattern detected. Continue regular health checkups.")
+        recommendation = (
+            "No strong cancer-like pattern was detected by the model. Review the heatmap, "
+            "segmentation, and confidence score as supporting outputs."
+        )
+
+    c.setFillColorRGB(0.15, 0.18, 0.20)
+    draw_wrapped_text(c, recommendation, margin + 18, height - 620, content_width - 36, line_height=11)
 
     # Disclaimer
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, height - 540, "Medical Disclaimer")
+    draw_section_title(c, "Educational Disclaimer", margin, height - 676)
+    c.setFillColorRGB(1.0, 0.97, 0.88)
+    c.setStrokeColorRGB(0.90, 0.76, 0.35)
+    c.roundRect(margin, height - 744, content_width, 48, 8, fill=1, stroke=1)
 
-    c.setFont("Helvetica", 10)
-    c.drawString(60, height - 560, "This report is AI-generated for educational support only.")
-    c.drawString(60, height - 575, "It must not be used as a final medical diagnosis.")
+    disclaimer = (
+        "This AI-generated report is part of a school project. It is not a certified medical report, does not confirm "
+        "diagnosis, and must not be used for real medical decisions."
+    )
+    c.setFillColorRGB(0.30, 0.22, 0.06)
+    draw_wrapped_text(c, disclaimer, margin + 18, height - 716, content_width - 36, line_height=11)
 
     # Footer
+    c.setStrokeColorRGB(0.82, 0.88, 0.91)
+    c.line(margin, 54, width - margin, 54)
+
+    c.setFillColorRGB(0.0, 0.22, 0.36)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(margin, 36, "AI Diagnostic Center")
+
+    c.setFillColorRGB(0.42, 0.48, 0.52)
     c.setFont("Helvetica", 9)
-    c.drawString(40, 30, "Generated by Lung Cancer Detection System")
+    c.drawRightString(width - margin, 36, "Generated by Lung Cancer Detection System")
 
     c.save()
     return pdf_path
@@ -157,7 +307,7 @@ def load_classifier():
     dataset = datasets.ImageFolder("dataset/train")
     classes = dataset.classes
 
-    model = models.resnet18(pretrained=False)
+    model = models.resnet18(weights=None)
     model.fc = nn.Linear(model.fc.in_features, 2)
     model.load_state_dict(torch.load("models/best_lung_cancer_model.pth", map_location="cpu"))
     model.eval()
@@ -233,8 +383,9 @@ def answer_overlay(context):
 
 def answer_pdf(context):
     return (
-        "The PDF report summarizes the prediction, confidence score, confidence category, segmentation image, heatmap, "
-        "recommendation, and educational disclaimer. It is meant as a school-project output, not a clinical report."
+        "The PDF report uses a hospital-style layout with an original AI Diagnostic Center logo, report ID, study "
+        "details, prediction summary, original image, segmentation image, heatmap, recommendation, and educational "
+        "disclaimer. It is meant as a polished school-project output, not a clinical report."
     )
 
 
@@ -302,8 +453,8 @@ def answer_run_project(context):
 def answer_symptoms(context):
     return (
         "Common lung cancer symptoms can include persistent cough, chest pain, coughing up blood, shortness of breath, "
-        "unexplained weight loss, and fatigue. This chatbot keeps the answer general because the project is not a "
-        "medical diagnosis system."
+        "unexplained weight loss, and fatigue. This project is not a "
+        "medical diagnosis system. Always consult a doctor for any health concerns or symptoms you may have."
     )
 
 
@@ -570,7 +721,7 @@ uploaded_file = st.file_uploader("Upload a CT scan image", type=["jpg", "jpeg", 
 
 if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Uploaded CT Scan", use_container_width=True)
+    st.image(image, caption="Uploaded CT Scan", width="stretch")
 
     # Check if the uploaded image is likely a CT scan
     if not is_likely_ct_scan(image):
@@ -625,13 +776,13 @@ if uploaded_file is not None:
 
         cv2.rectangle(img_with_boxes, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-        st.image(img_with_boxes, caption="Illustrative Suspicious Region (Demo)", use_container_width=True)
+        st.image(img_with_boxes, caption="Illustrative Suspicious Region (Demo)", width="stretch")
         st.caption("The green box is an illustrative region for presentation purposes. The Grad-CAM heatmap shows the model attention.")
     else:
         st.info("No illustrative suspicious region displayed because the scan was predicted as no cancer.")
 
     # Show segmentation
-    st.image(lung_mask, caption="Segmented Lung Region", use_container_width=True)
+    st.image(lung_mask, caption="Segmented Lung Region", width="stretch")
 
     # Grad-CAM heatmap
     grayscale_cam = cam(input_tensor=img)[0]
@@ -643,20 +794,21 @@ if uploaded_file is not None:
         use_rgb=True
     )
 
-    st.image(visualization, caption="AI Attention Heatmap", use_container_width=True)
+    st.image(visualization, caption="AI Attention Heatmap", width="stretch")
 
     # Create PDF Report
     pdf_path = create_pdf_report(
         prediction,
         confidence_score,
         confidence_category,
+        image,
         lung_mask,
         visualization
     )
 
     with open(pdf_path, "rb") as pdf_file:
         st.download_button(
-            label="📄 Download Medical PDF Report",
+            label="📄 Download Educational PDF Report",
             data=pdf_file,
             file_name="lung_cancer_report.pdf",
             mime="application/pdf"
