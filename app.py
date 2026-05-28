@@ -9,7 +9,6 @@ import numpy as np
 import cv2
 from src.segmentation import segment_lung
 import base64
-import streamlit.components.v1 as components
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -17,6 +16,8 @@ from datetime import datetime
 import tempfile
 import io
 from pathlib import Path
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 st.set_page_config(layout="wide")
@@ -151,6 +152,354 @@ def create_pdf_report(prediction, confidence_score, confidence_category, segment
     return pdf_path
 
 
+@st.cache_resource(show_spinner="Loading classification model...")
+def load_classifier():
+    dataset = datasets.ImageFolder("dataset/train")
+    classes = dataset.classes
+
+    model = models.resnet18(pretrained=False)
+    model.fc = nn.Linear(model.fc.in_features, 2)
+    model.load_state_dict(torch.load("models/best_lung_cancer_model.pth", map_location="cpu"))
+    model.eval()
+
+    target_layers = [model.layer4[-1]]
+    cam = GradCAM(model=model, target_layers=target_layers)
+
+    return model, classes, cam
+
+
+def answer_result(context):
+    if not context["has_result"]:
+        return "Please upload a CT scan image first. After prediction, I can explain the result in simple terms."
+
+    if context["prediction"] == "cancer":
+        return (
+            f"The system predicted `cancer` with a confidence score of {context['confidence']:.2f}%. "
+            f"The confidence category is `{context['confidence_category']}`. This means the model found image patterns "
+            "similar to the cancer examples in the school project dataset. It is not a medical diagnosis."
+        )
+
+    return (
+        f"The system predicted `no_cancer` with a confidence score of {context['confidence']:.2f}%. "
+        "This means the model did not find strong cancer-like patterns in the uploaded image, based on what it learned "
+        "from the project dataset."
+    )
+
+
+def answer_confidence(context):
+    if not context["has_result"]:
+        return "Upload a CT scan first so the system can calculate a confidence score."
+
+    return (
+        f"The confidence score is {context['confidence']:.2f}%. It shows how strongly the model supports its selected "
+        "class for this image. A high score does not mean a confirmed diagnosis; it only reflects the model output."
+    )
+
+
+def answer_confidence_category(context):
+    if not context["has_result"]:
+        return "The confidence category appears after an image is uploaded and classified."
+
+    if context["prediction"] == "no_cancer":
+        return "The confidence category is not applied because the current prediction is `no_cancer`."
+
+    return (
+        f"The confidence category is `{context['confidence_category']}`. It is based only on the model confidence score, "
+        "not on clinical lung cancer staging."
+    )
+
+
+def answer_heatmap(context):
+    return (
+        "The heatmap is generated with Grad-CAM. Warmer areas show the parts of the CT image that influenced the "
+        "ResNet-18 classifier most strongly. It helps explain the model's attention, but it should not be treated as "
+        "a doctor's marked diagnosis."
+    )
+
+
+def answer_segmentation(context):
+    return (
+        "The segmentation view uses OpenCV image processing to isolate the lung region. It converts the image to "
+        "grayscale, applies blur and thresholding, cleans the mask, and shows the masked lung area."
+    )
+
+
+def answer_overlay(context):
+    return (
+        "The green box is an illustrative suspicious-region overlay for presentation purposes. It is not produced by "
+        "a trained object detector. The Grad-CAM heatmap is the actual model-attention visualization."
+    )
+
+
+def answer_pdf(context):
+    return (
+        "The PDF report summarizes the prediction, confidence score, confidence category, segmentation image, heatmap, "
+        "recommendation, and educational disclaimer. It is meant as a school-project output, not a clinical report."
+    )
+
+
+def answer_model(context):
+    return (
+        "The classification model is ResNet-18 from Torchvision. The final layer is changed to output two classes: "
+        "`cancer` and `no_cancer`. The training script saves the best validation model as "
+        "`models/best_lung_cancer_model.pth`."
+    )
+
+
+def answer_dataset(context):
+    return (
+        "The dataset is arranged with separate `train`, `val`, and `test` folders. Each split contains `cancer` and "
+        "`no_cancer` classes. The project also includes scripts to check and remove exact duplicate images between "
+        "splits."
+    )
+
+
+def answer_accuracy(context):
+    return (
+        "The README reports 97.01% test accuracy, F1-score of 0.97, and cancer recall of 1.00 for the current school "
+        "project dataset. These numbers are useful for the project report, but they should not be interpreted as "
+        "real clinical performance."
+    )
+
+
+def answer_next_steps(context):
+    if not context["has_result"]:
+        return "First upload a CT image. Then I can explain the prediction, heatmap, segmentation, and report output."
+
+    if context["prediction"] == "cancer":
+        return (
+            "For the project demo, the next step is to review the confidence score, Grad-CAM heatmap, segmentation, and "
+            "PDF report. In real life, a suspicious scan must be reviewed by a qualified doctor or radiologist."
+        )
+
+    return (
+        "For the project demo, you can review the confidence score, heatmap, segmentation, and PDF report. In real life, "
+        "a doctor should still review scans if symptoms or concerns continue."
+    )
+
+
+def answer_upload(context):
+    return (
+        "The app accepts JPG, JPEG, and PNG image uploads. It also checks whether the image looks like a CT scan by "
+        "looking for mostly grayscale pixels and enough contrast."
+    )
+
+
+def answer_limitations(context):
+    return (
+        "This is a school project, so its main limitations are the small dataset, basic image preprocessing, no DICOM "
+        "support, no external clinical validation, and an illustrative region box that is not a real detector output."
+    )
+
+
+def answer_run_project(context):
+    return (
+        "To run the app, install the dependencies with `pip install -r requirements.txt`, then start Streamlit with "
+        "`python3 -m streamlit run app.py`. To retrain the model, run `python3 src/train_model.py`."
+    )
+
+
+def answer_symptoms(context):
+    return (
+        "Common lung cancer symptoms can include persistent cough, chest pain, coughing up blood, shortness of breath, "
+        "unexplained weight loss, and fatigue. This chatbot keeps the answer general because the project is not a "
+        "medical diagnosis system."
+    )
+
+
+def answer_risk_factors(context):
+    return (
+        "Common risk factors include smoking, secondhand smoke, family history, air pollution, and exposure to harmful "
+        "substances such as asbestos. The app itself does not calculate personal risk; it only classifies the uploaded image."
+    )
+
+
+def answer_treatment(context):
+    return (
+        "Treatment decisions are outside this system. Real treatment can depend on clinical evaluation, imaging, biopsy, "
+        "and doctor review. In this project, the chatbot only explains the AI output and general concepts."
+    )
+
+
+def answer_capabilities(context):
+    return (
+        "I can answer questions about this project: the prediction, confidence score, confidence category, heatmap, "
+        "segmentation, illustrative region box, PDF report, dataset, model, accuracy, limitations, and how to run it."
+    )
+
+
+CHATBOT_TOPICS = [
+    {
+        "name": "result",
+        "questions": [
+            "explain my result prediction outcome what does the result mean why cancer no cancer",
+            "why did the system say cancer what does no cancer mean interpret prediction",
+        ],
+        "answer": answer_result,
+    },
+    {
+        "name": "confidence",
+        "questions": [
+            "confidence score probability percentage how sure is the model what does confidence mean",
+            "is this score reliable how strong is prediction",
+        ],
+        "answer": answer_confidence,
+    },
+    {
+        "name": "confidence category",
+        "questions": [
+            "confidence category high model confidence moderate model confidence stage staging",
+            "why does it say high confidence category is this cancer stage",
+        ],
+        "answer": answer_confidence_category,
+    },
+    {
+        "name": "heatmap",
+        "questions": [
+            "heatmap grad cam attention map red area yellow area why model focus explain visualization",
+            "what does ai attention heatmap show",
+        ],
+        "answer": answer_heatmap,
+    },
+    {
+        "name": "segmentation",
+        "questions": [
+            "segmentation segmented lung region mask open cv threshold lung area image processing",
+            "how does the app isolate lungs what is segmented image",
+        ],
+        "answer": answer_segmentation,
+    },
+    {
+        "name": "overlay",
+        "questions": [
+            "green box suspicious region yolo detector bounding box illustrative region detection box",
+            "is the box real why is there a rectangle",
+        ],
+        "answer": answer_overlay,
+    },
+    {
+        "name": "pdf",
+        "questions": [
+            "pdf report download medical report what is inside report generate report summary",
+            "how does the report work",
+        ],
+        "answer": answer_pdf,
+    },
+    {
+        "name": "model",
+        "questions": [
+            "model architecture resnet resnet18 pytorch torchvision classifier training model layers",
+            "what algorithm does the project use",
+        ],
+        "answer": answer_model,
+    },
+    {
+        "name": "dataset",
+        "questions": [
+            "dataset train validation test split cancer no cancer folders data leakage duplicate images",
+            "how is data arranged what data did you use",
+        ],
+        "answer": answer_dataset,
+    },
+    {
+        "name": "accuracy",
+        "questions": [
+            "accuracy f1 recall precision confusion matrix performance reliable test result metrics",
+            "how accurate is the model",
+        ],
+        "answer": answer_accuracy,
+    },
+    {
+        "name": "next steps",
+        "questions": [
+            "next step what should i do now after prediction recommendation doctor radiologist review",
+            "what happens after upload what do i do with result",
+        ],
+        "answer": answer_next_steps,
+    },
+    {
+        "name": "upload",
+        "questions": [
+            "upload image jpg jpeg png ct scan valid invalid image grayscale contrast file type",
+            "why was my image rejected what files can i upload",
+        ],
+        "answer": answer_upload,
+    },
+    {
+        "name": "limitations",
+        "questions": [
+            "limitations disclaimer school project not real diagnosis clinical validation dicom small dataset",
+            "can this be used in hospital real world certified medical system",
+        ],
+        "answer": answer_limitations,
+    },
+    {
+        "name": "run project",
+        "questions": [
+            "run app install requirements streamlit train model command start project setup",
+            "how do i run this project how do i train it",
+        ],
+        "answer": answer_run_project,
+    },
+    {
+        "name": "symptoms",
+        "questions": [
+            "symptoms signs cough chest pain blood shortness breath weight loss fatigue",
+            "what are common symptoms",
+        ],
+        "answer": answer_symptoms,
+    },
+    {
+        "name": "risk factors",
+        "questions": [
+            "risk factors smoking secondhand smoke family history air pollution asbestos causes",
+            "what causes lung cancer risk",
+        ],
+        "answer": answer_risk_factors,
+    },
+    {
+        "name": "treatment",
+        "questions": [
+            "treatment therapy surgery chemotherapy radiation biopsy doctor diagnosis medical care",
+            "how is lung cancer treated",
+        ],
+        "answer": answer_treatment,
+    },
+    {
+        "name": "capabilities",
+        "questions": [
+            "help what can you do chatbot assistant questions explain project system features",
+            "what can i ask you",
+        ],
+        "answer": answer_capabilities,
+    },
+]
+
+
+def get_chatbot_response(question, context):
+    normalized_question = question.strip().lower()
+
+    if normalized_question in ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]:
+        return "Hello. I can help explain this lung cancer detection school project and its current prediction output."
+
+    documents = [" ".join(topic["questions"]) for topic in CHATBOT_TOPICS]
+    vectorizer = TfidfVectorizer(ngram_range=(1, 2), stop_words="english")
+    topic_matrix = vectorizer.fit_transform(documents)
+    question_vector = vectorizer.transform([normalized_question])
+    scores = cosine_similarity(question_vector, topic_matrix).flatten()
+    best_index = int(scores.argmax())
+    best_score = scores[best_index]
+
+    if best_score < 0.12:
+        return (
+            "I am focused on this lung cancer detection project. You can ask me about the prediction, confidence, "
+            "heatmap, segmentation, PDF report, dataset, model, accuracy, limitations, or how to run the system."
+        )
+
+    topic = CHATBOT_TOPICS[best_index]
+    return topic["answer"](context)
+
+
 st.title("Lung Cancer Detection System")
 
 hero_images = [
@@ -199,7 +548,7 @@ if hero_images:
 </style>
 """
 
-    components.html(slider_html, height=365)
+    st.html(slider_html)
 else:
     st.info("Hero slide images are missing. Add images named hero1.jpg to hero6.jpg inside the images folder.")
 
@@ -213,19 +562,8 @@ transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
-# Get class order directly from training dataset
-dataset = datasets.ImageFolder("dataset/train")
-classes = dataset.classes
-
-# Load trained model
-model = models.resnet18(pretrained=False)
-model.fc = nn.Linear(model.fc.in_features, 2)
-model.load_state_dict(torch.load("models/best_lung_cancer_model.pth", map_location="cpu"))
-model.eval()
-
-# Grad-CAM setup
-target_layers = [model.layer4[-1]]
-cam = GradCAM(model=model, target_layers=target_layers)
+# Load trained classifier and Grad-CAM once so the chatbot stays responsive during Streamlit reruns
+model, classes, cam = load_classifier()
 
 # Upload image
 uploaded_file = st.file_uploader("Upload a CT scan image", type=["jpg", "jpeg", "png"])
@@ -327,205 +665,54 @@ if uploaded_file is not None:
 
 st.subheader("Patient Support AI Chatbot")
 
-user_input = st.text_input(
-    "Ask about the prediction, confidence score, confidence category, heatmap, segmentation, symptoms, risk factors, or next steps:"
-)
+st.caption("Ask focused questions about this system, its prediction, model, heatmap, segmentation, report, dataset, or limitations.")
 
-if user_input:
-    question = user_input.lower().strip()
+current_prediction = prediction if "prediction" in locals() else None
+current_confidence = confidence_score if "confidence_score" in locals() else 0
+current_confidence_category = confidence_category if "confidence_category" in locals() else "Not available"
 
-    current_prediction = prediction if "prediction" in locals() else "unknown"
-    current_confidence = confidence_score if "confidence_score" in locals() else 0
-    current_confidence_category = confidence_category if "confidence_category" in locals() else "Not available"
+chatbot_context = {
+    "has_result": current_prediction is not None,
+    "prediction": current_prediction,
+    "confidence": current_confidence,
+    "confidence_category": current_confidence_category,
+}
 
-    response = ""
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = [
+        {
+            "role": "assistant",
+            "content": (
+                "Hello. I am the project assistant. Ask me about the prediction, confidence score, heatmap, "
+                "segmentation, PDF report, dataset, model, accuracy, or limitations."
+            ),
+        }
+    ]
 
-    # Greeting
-    if question in ["hi", "hello", "hey"]:
-        response = (
-            "Hello. I can help explain the result, confidence score, confidence category, symptoms, risk factors, "
-            "treatment basics, and what to do next."
-        )
+quick_prompt = None
+quick_cols = st.columns(4)
 
-    # Result meaning
-    elif "result" in question and ("mean" in question or "explain" in question):
-        if current_prediction == "cancer":
-            response = (
-                f"The system predicts cancer with a confidence score of {current_confidence:.2f}%. "
-                f"The confidence category is {current_confidence_category}. This means the model detected patterns similar to cancer cases, "
-                "but this is not a final diagnosis and must be confirmed by a doctor."
-            )
-        elif current_prediction == "no_cancer":
-            response = (
-                f"The system predicts no cancer with a confidence score of {current_confidence:.2f}%. "
-                "This means the model did not detect strong cancer-like patterns in the scan, "
-                "but medical confirmation is still recommended."
-            )
-        else:
-            response = "Please upload a CT scan first so I can explain the result."
+if quick_cols[0].button("Explain result"):
+    quick_prompt = "Explain my result"
+if quick_cols[1].button("Heatmap"):
+    quick_prompt = "What does the heatmap show?"
+if quick_cols[2].button("Model"):
+    quick_prompt = "What model does this system use?"
+if quick_cols[3].button("Limitations"):
+    quick_prompt = "What are the limitations?"
 
-    # Next step
-    elif "next" in question or "what should i do" in question or "what do i do now" in question:
-        if current_prediction == "cancer":
-            response = (
-                "The next step is to consult a qualified doctor or radiologist as soon as possible for proper evaluation, "
-                "possible biopsy, and additional clinical tests."
-            )
-        elif current_prediction == "no_cancer":
-            response = (
-                "Even though the result is no cancer, you should still consult a doctor if symptoms continue or if the scan "
-                "needs medical review."
-            )
-        else:
-            response = "Please upload a CT scan first so I can guide you."
+typed_prompt = st.chat_input("Ask about this lung cancer detection system")
+user_prompt = quick_prompt or typed_prompt
 
-    # Trust / reliability
-    elif "trust" in question or "reliable" in question or "accurate" in question:
-        response = (
-            "This system is designed to support analysis, but it is not a final medical authority. "
-            "Its output should always be reviewed by a qualified healthcare professional."
-        )
+if user_prompt:
+    st.session_state.chat_messages.append({"role": "user", "content": user_prompt})
+    st.session_state.chat_messages.append(
+        {
+            "role": "assistant",
+            "content": get_chatbot_response(user_prompt, chatbot_context),
+        }
+    )
 
-    # Confidence
-    elif "confidence" in question:
-        response = (
-            f"The confidence score is {current_confidence:.2f}%. "
-            "This shows how strongly the model supports its prediction, but it is not the same as a confirmed diagnosis."
-        )
-
-    # Confidence category / stage wording
-    elif "confidence category" in question or "category" in question or "stage" in question:
-        if current_prediction == "cancer":
-            response = (
-                f"The confidence category is {current_confidence_category}. This is based on the model score only, "
-                "not on clinical cancer staging."
-            )
-        else:
-            response = "No confidence category is shown because the current prediction is no cancer."
-
-    # Symptoms
-    elif "symptom" in question or "sign" in question:
-        response = (
-            "Common symptoms of lung cancer may include persistent cough, chest pain, coughing up blood, shortness of breath, "
-            "unexplained weight loss, and fatigue. However, symptoms vary and only a doctor can evaluate them properly."
-        )
-
-    # Risk factors
-    elif "risk" in question or "cause" in question:
-        response = (
-            "Common risk factors include smoking, secondhand smoke, family history, air pollution, and exposure to harmful substances "
-            "such as asbestos. A doctor can help assess individual risk."
-        )
-
-    # Smoking
-    elif "smoking" in question or "smoker" in question:
-        response = (
-            "Smoking is one of the biggest risk factors for lung cancer. However, non-smokers can also develop lung cancer, "
-            "so medical evaluation is still important when symptoms or suspicious scans are present."
-        )
-
-    # Family history
-    elif "family history" in question or "genetic" in question or "hereditary" in question:
-        response = (
-            "Family history can increase the risk of lung cancer, although it does not guarantee that someone will develop it. "
-            "Doctors use family and medical history together when evaluating risk."
-        )
-
-    # Prevention
-    elif "prevent" in question or "prevention" in question:
-        response = (
-            "Risk may be reduced by avoiding smoking, reducing exposure to harmful substances, maintaining regular medical checkups, "
-            "and seeking evaluation early when symptoms appear."
-        )
-
-    # Early detection
-    elif "early detection" in question or "detect early" in question:
-        response = (
-            "Early detection is important because treatment is often more effective when lung cancer is found at an earlier stage."
-        )
-
-    # Treatment
-    elif "treatment" in question or "treat" in question or "therapy" in question:
-        response = (
-            "Treatment may include surgery, chemotherapy, radiation therapy, targeted therapy, or immunotherapy depending on medical "
-            "evaluation. A doctor must decide the appropriate treatment plan."
-        )
-
-    # Biopsy
-    elif "biopsy" in question:
-        response = (
-            "A biopsy is a medical procedure used to collect tissue so doctors can confirm whether cancer cells are present. "
-            "It is often important for final diagnosis."
-        )
-
-    # CT scan meaning
-    elif "ct scan" in question or "scan" in question:
-        response = (
-            "A CT scan creates detailed cross-sectional images of the body and helps doctors examine lung structure and possible abnormalities."
-        )
-
-    # Heatmap
-    elif "heatmap" in question or "why did the model focus" in question:
-        response = (
-            "The heatmap shows the region of the scan that influenced the AI model most strongly when making its prediction."
-        )
-
-    # Segmentation
-    elif "segmentation" in question or "lung region" in question:
-        response = (
-            "Segmentation isolates the lung area so the system can focus on the most relevant part of the CT scan."
-        )
-
-    # False positives / false alarm
-    elif "false positive" in question or "false alarm" in question:
-        response = (
-            "A false positive means the system flagged cancer when no cancer is actually present. "
-            "This is why doctor confirmation is always necessary."
-        )
-
-    # Hospital use
-    elif "hospital" in question or "clinic" in question or "real world" in question:
-        response = (
-            "This system is an educational support tool and is not yet intended for direct clinical deployment without further validation."
-        )
-
-    # Doctor / diagnosis
-    elif "doctor" in question or "diagnosis" in question:
-        response = (
-            "A doctor should always make the final diagnosis. This system is meant to support analysis, not replace professional medical judgment."
-        )
-
-    # Safety / disclaimer
-    elif "safe" in question or "disclaimer" in question:
-        response = (
-            "This system is for educational purposes only and should not be used as a final medical diagnosis. "
-            "Always consult a qualified healthcare professional."
-        )
-
-    # Emotional support
-    elif "worried" in question or "scared" in question or "afraid" in question:
-        response = (
-            "It is understandable to feel worried. The best next step is to speak with a qualified doctor who can evaluate the scan properly "
-            "and guide you through the next steps."
-        )
-
-    # Normal / no cancer
-    elif "normal" in question or "no cancer" in question:
-        if current_prediction == "no_cancer":
-            response = (
-                "The system predicted no cancer, which means no strong cancer-related pattern was detected in the scan."
-            )
-        else:
-            response = (
-                "The current result is not no cancer. The model detected suspicious patterns, so professional medical review is recommended."
-            )
-
-    # Fallback
-    else:
-        response = (
-            "I can help explain the result, confidence score, confidence category, symptoms, risk factors, prevention, treatment basics, "
-            "CT scan meaning, and what to do next."
-        )
-
-    st.markdown("###  Chatbot Response")
-    st.success(response)
+for message in st.session_state.chat_messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])

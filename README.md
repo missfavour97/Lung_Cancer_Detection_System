@@ -25,7 +25,7 @@ The aim of this project is to show an end-to-end AI workflow for medical image a
 - Grad-CAM attention heatmap for model explainability
 - Illustrative suspicious-region overlay for presentation purposes
 - PDF report generation using ReportLab
-- Rule-based patient support chatbot
+- System-focused chatbot with similarity-based question matching
 - Training loss and validation accuracy graphs
 - Data leakage checking scripts for duplicate images
 
@@ -135,7 +135,25 @@ After an image is uploaded, the app can show:
 - Segmented lung region
 - Grad-CAM heatmap
 - Downloadable PDF report
-- Chatbot explanation
+- System-focused chatbot explanation
+
+## System-Focused Chatbot
+
+The chatbot is designed to answer questions about this specific project instead of acting like a general medical chatbot. It can explain:
+
+- The current prediction result
+- Confidence score and confidence category
+- Grad-CAM heatmap
+- Lung segmentation output
+- Illustrative suspicious-region overlay
+- PDF report
+- Dataset structure
+- ResNet-18 model
+- Accuracy metrics
+- Project limitations
+- How to run or train the project
+
+The chatbot uses TF-IDF similarity matching, so it can understand different ways of asking the same project-related question. It still gives only educational responses and does not provide real medical diagnosis.
 
 ## Hero Slide Images
 
@@ -183,7 +201,7 @@ python3 fix_leakage.py
 - Add data augmentation during training
 - Store model class labels separately from the dataset folder
 - Add automated tests for model loading, segmentation, and PDF generation
-- Improve the chatbot with more structured educational answers
+- Add an optional API-based chatbot mode for more natural responses
 - Add screenshots of the Streamlit app to the README
 
 ## Author
