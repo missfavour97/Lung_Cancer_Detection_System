@@ -73,14 +73,13 @@ Lung_Cancer_Detection_System/
 git clone https://github.com/missfavour97/Lung_Cancer_Detection_System
 cd Lung_Cancer_Detection_System
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 ## Run the Application
 
 ```bash
-python3 -m streamlit run app.py
+.venv/bin/python -m streamlit run app.py
 ```
 
 Then open:
